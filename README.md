@@ -1,5 +1,5 @@
 # Kelp
-Kernel-based Linear Projection
+Kernel-based Linear Projection Python implementation. (MATLAB version available [here](https://github.com/barbosaaob/kelp/tree/matlab))
 
 [Visualizing and Interacting with Kernelized Data](http://ieeexplore.ieee.org/stamp/stamp.jsp?tp=&arnumber=7180398) by Barbosa, A., Paulovich, F.V., Paiva, A., Goldenstein, S., Petronetto, F., Nonato, L.G.
 
