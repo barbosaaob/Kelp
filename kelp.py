@@ -1,16 +1,32 @@
 """
-Kelp projection
+Kelp
+
+Kelp multidimensional projection technique.
+http://www.lcad.icmc.usp.br/~barbosa
 """
 from __future__ import print_function
-import scipy.spatial.distance as pdist
-import numpy as np
 from projection import projection
 from force import force
 
+try:
+    import scipy.spatial.distance as pdist
+    import numpy as np
+except ImportError as msg:
+    error = ", please install the following packages:\n"
+    error += "    NumPy      (http://www.numpy.org)\n"
+    error += "    SciPy      (http://www.scipy.org)"
+    raise ImportError(str(msg) + error)
+
 
 class Kelp(projection.Projection):
+    """
+    Kelp projection.
+    """
     def __init__(self, data, data_class, sample=None, sample_projection=None,
                  kernel_param=None):
+        """
+        Class initialization.
+        """
         assert type(data) is np.ndarray, "*** ERROR (Kelp): Data is of wrong \
                 type!"
 
@@ -18,40 +34,15 @@ class Kelp(projection.Projection):
         self.sample = sample
         self.sample_projection = sample_projection
         self.kernel_param = kernel_param
-        # self.initialization()
 
-    def initialization(self):
+    def project(self, tol=1e-6):
         """
-        TODO: fix sample condition
+        Projection method.
+
+        Projection itself.
         """
-        # ninst = self.data_ninstances
-        sample_condition = self.sample and (not self.sample_projection)
-
-        print(bool(self.sample), bool(not self.sample_projection))
-        print(bool(sample_condition))
-        print(bool(not sample_condition))
-
-        if sample_condition or (not sample_condition):
-            print("*** WARNING (Kelp): Using random sample!")
-            self.sample = None
-            self.sample_projection = None
-
-        # if not self.sample:
-        #     self.sample = np.random.permutation(ninst)
-        # else:
-        #     self.sample = sample
-
-        # if not self.sample_projection:
-        #     force_proj = force.Force(self.data[self.sample, :], [])
-        #     force_proj.project()
-        #     self.sample_projection = force_proj.get_projection()
-        # else:
-        #     self.sample_projection = sample_projection
-
-    def project(self):
-        ZERO_THOLD = 1e-6
         ninst, dim = self.data.shape    # number os instances, data dimension
-        k = len(self.sample)                 # number os sample instances
+        k = len(self.sample)            # number os sample instances
         p = self.projection_dim         # visual space dimension
         x = self.data
         xs = self.data[self.sample, :]
@@ -71,7 +62,7 @@ class Kelp(projection.Projection):
         evals, evecs = evals[idx], evecs[:, idx]
         nz_idx = 0
         for i in range(k):
-            if evals[i] >= ZERO_THOLD:
+            if evals[i] >= tol:
                 nz_idx = i
                 evecs[:, i] = evecs[:, i] / np.sqrt(evals[i])
 
@@ -96,10 +87,16 @@ class Kelp(projection.Projection):
             self.projection[pt, :] = np.dot(Kxc.T, T)
 
     def kernel_matrix(self, x):
+        """
+        Computes gaussian kernel matrix.
+        """
         sqdist = pdist.squareform(pdist.pdist(x)) ** 2
         return np.exp(-sqdist / self.kernel_param)
 
     def center_kernel_matrix(self, kmat):
+        """
+        Centralizes kernel matrix.
+        """
         k = kmat.shape[0]
         Ik = np.ones((k, k)) / float(k)
         return kmat - np.dot(Ik, kmat) - np.dot(kmat, Ik) + \
@@ -119,6 +116,7 @@ def run():
     data_class = data_file[:, dim - 1]
     sample = np.random.permutation(ninst)
     sample = sample[range(sample_size)]
+
     # force
     start_time = time.time()
     print("Projecting samples... ", end="")
@@ -127,6 +125,7 @@ def run():
     f.project()
     sample_projection = f.get_projection()
     print("Done. (" + str(time.time() - start_time) + "s.)")
+
     # kelp
     start_time = time.time()
     print("Projecting... ", end="")
