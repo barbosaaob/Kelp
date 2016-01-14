@@ -23,21 +23,75 @@ class Kelp(projection.Projection):
     Kelp projection.
     """
     def __init__(self, data, data_class, sample=None, sample_projection=None,
-                 kernel_param=None):
+                 kernel_param=None, data_type="data"):
         """
         Class initialization.
         """
         assert type(data) is np.ndarray, "*** ERROR (Kelp): Data is of wrong \
                 type!"
+        assert data_type == "data" or data_type == "kmat", "*** ERROR (Kelp) \
+                unknown data type."
 
         projection.Projection.__init__(self, data, data_class)
         self.sample = sample
         self.sample_projection = sample_projection
-        self.kernel_param = kernel_param
+        if kernel_param is None:
+            self.kernel_param = 2 * \
+                np.sum(np.var(self.data, ddof=1, keepdims=True,
+                              axis=0)) / self.data.shape[1]
+        else:
+            self.kernel_param = kernel_param
+        self.data_type = data_type
 
-    def project(self, tol=1e-6):
+    def project(self):
+        if self.data_type == "data":
+            self.project_data()
+        elif self.data_type == "kmat":
+            self.project_kmat()
+
+    def project_kmat(self, tol=1e-6):
         """
-        Projection method.
+        Projection method for kernel matrix. Assumes K is centered.
+
+        Projection itself.
+        """
+        ninst = self.data.shape[0]      # number os instances
+        k = len(self.sample)            # number os sample instances
+        p = self.projection_dim         # visual space dimension
+        K_uncentered = self.data[np.ix_(self.sample, self.sample)]
+        K = self.center_kernel_matrix(K_uncentered)
+
+        # kernel matrix eigendecomposition
+        evals, evecs = np.linalg.eig(K)
+        idx = evals.argsort()[::-1]
+        evals, evecs = evals[idx], evecs[:, idx]
+        nz_idx = 0
+        for i in range(k):
+            if evals[i] >= tol:
+                nz_idx = i
+                evecs[:, i] = evecs[:, i] / np.sqrt(evals[i])
+
+        # make evals to be evals of covariance matrix
+        evals[range(nz_idx + 1)] = float(k) / evals[range(nz_idx + 1)]
+
+        # projection it self
+        self.projection = np.zeros((ninst, p))
+        ones = np.ones((k, 1)) / float(k)
+        ONES = np.ones((k, k)) / float(k)
+        evecs_nz = evecs[:, range(nz_idx + 1)]
+        evals_nz = np.diag(evals[range(nz_idx + 1)])
+        T = (1.0 / k) * np.dot(np.dot(np.dot(np.dot(evecs_nz, evals_nz),
+                                             evecs_nz.T), K),
+                               self.sample_projection)
+        for pt in range(ninst):
+            Kx = self.data[np.ix_(self.sample, [pt])]
+            Kxc = Kx - K_uncentered.dot(ones) - ONES.dot(Kx) + \
+                ONES.dot(K_uncentered.dot(ones))
+            self.projection[pt, :] = np.dot(Kxc.T, T)
+
+    def project_data(self, tol=1e-6):
+        """
+        Projection method for euclidian data.
 
         Projection itself.
         """
@@ -124,6 +178,7 @@ def run():
     f = force.Force(data[sample, :], [])
     f.project()
     sample_projection = f.get_projection()
+    sample_projection -= np.mean(sample_projection, 0)
     print("Done. (" + str(time.time() - start_time) + "s.)")
 
     # kelp
@@ -134,6 +189,17 @@ def run():
     kelp.project()
     print("Done. (" + str(time.time() - start_time) + "s.)")
     kelp.plot()
+
+    # kelp with kernel matrix test
+    kelp_proj = kelp.get_projection()
+    K = kelp.kernel_matrix(data)
+    kelp_kmat = Kelp(K, data_class, sample, sample_projection,
+                     data_type="kmat")
+    kelp_kmat.project()
+    kelp_kmat_proj = kelp_kmat.get_projection()
+    assert np.max(np.abs(kelp_proj - kelp_kmat_proj)) < 1e-8, \
+        "*** ERROR: kelp with data and kelp with kmat give different values."
+    print(np.abs(kelp_proj-kelp_kmat_proj))
 
 
 if __name__ == "__main__":
